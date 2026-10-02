@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cadastro
+      POSTGRES_USER: cadastro
+      POSTGRES_PASSWORD: cadastro  # somente desenvolvimento local
+    ports:
+      - "${DB_PORT:-5432}:5432"  # ex.: DB_PORT=55432 se a 5432 estiver ocupada
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

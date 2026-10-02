@@ -1,0 +1,190 @@
+openapi: 3.1.0
+info:
+  title: Cadastro de Cliente API
+  version: 1.0.0
+  description: >
+    API REST do módulo de cadastro de cliente (spec 001-cadastro-cliente).
+    Dados pessoais nunca são ecoados em mensagens de erro.
+paths:
+  /clientes:
+    post:
+      summary: Cadastrar cliente
+      operationId: criarCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClienteEntrada' }
+      responses:
+        '201':
+          description: Cliente cadastrado
+          headers:
+            Location:
+              schema: { type: string, example: /clientes/3f1c9a8e-2b7d-4e1a-9c55-0a6f2d1b7e44 }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClienteDetalhe' }
+        '409': { $ref: '#/components/responses/DocumentoDuplicado' }
+        '422': { $ref: '#/components/responses/DadosInvalidos' }
+    get:
+      summary: Listar clientes (paginado, 20 por página, ordenado por nome)
+      operationId: listarClientes
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200':
+          description: Página de clientes (vazia se além da última)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginaClientes' }
+        '422': { $ref: '#/components/responses/DadosInvalidos' }
+  /clientes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Consultar cliente
+      operationId: obterCliente
+      responses:
+        '200':
+          description: Dados completos do cliente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClienteDetalhe' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+    put:
+      summary: Editar cliente (substituição completa, mesmas validações do cadastro)
+      operationId: editarCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClienteEntrada' }
+      responses:
+        '200':
+          description: Cliente atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClienteDetalhe' }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+        '409': { $ref: '#/components/responses/DocumentoDuplicado' }
+        '422': { $ref: '#/components/responses/DadosInvalidos' }
+    delete:
+      summary: Remover cliente definitivamente
+      description: >
+        Exclusão física e definitiva. A confirmação explícita (FR-015) é feita pelo
+        cliente da API antes da chamada.
+      operationId: removerCliente
+      responses:
+        '204': { description: Cliente removido }
+        '404': { $ref: '#/components/responses/NaoEncontrado' }
+components:
+  schemas:
+    EnderecoEntrada:
+      type: object
+      required: [logradouro, numero, bairro, cidade, uf, cep]
+      properties:
+        logradouro: { type: string, example: Rua das Flores }
+        numero: { type: string, example: '123' }
+        complemento: { type: [string, 'null'], example: Apto 42 }
+        bairro: { type: string, example: Centro }
+        cidade: { type: string, example: São Paulo }
+        uf: { type: string, example: SP }
+        cep: { type: string, description: Com ou sem pontuação, example: 01001-000 }
+    Endereco:
+      allOf:
+        - $ref: '#/components/schemas/EnderecoEntrada'
+        - type: object
+          properties:
+            cep: { type: string, description: Formatado, example: 01001-000 }
+    ClienteEntrada:
+      type: object
+      required: [nome, documento, email, telefone, endereco]
+      properties:
+        nome: { type: string, example: Maria da Silva }
+        documento:
+          type: string
+          description: CPF (11 dígitos) ou CNPJ (14 dígitos), com ou sem pontuação
+          example: 529.982.247-25
+        email: { type: string, example: maria@example.com }
+        telefone: { type: string, description: DDD + número, example: (11) 98765-4321 }
+        endereco: { $ref: '#/components/schemas/EnderecoEntrada' }
+    ClienteDetalhe:
+      type: object
+      required: [id, nome, documento, tipo_pessoa, email, telefone, endereco, criado_em, atualizado_em]
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        documento: { type: string, description: Formatado e completo, example: 529.982.247-25 }
+        tipo_pessoa: { type: string, enum: [FISICA, JURIDICA] }
+        email: { type: string }
+        telefone: { type: string, example: (11) 98765-4321 }
+        endereco: { $ref: '#/components/schemas/Endereco' }
+        criado_em: { type: string, format: date-time }
+        atualizado_em: { type: string, format: date-time }
+    ClienteResumo:
+      type: object
+      required: [id, nome, documento_mascarado, tipo_pessoa, email, telefone]
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        documento_mascarado: { type: string, example: '***.982.247-**' }
+        tipo_pessoa: { type: string, enum: [FISICA, JURIDICA] }
+        email: { type: string }
+        telefone: { type: string }
+    PaginaClientes:
+      type: object
+      required: [items, page, page_size, total_items, total_pages]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ClienteResumo' }
+        page: { type: integer, example: 1 }
+        page_size: { type: integer, const: 20 }
+        total_items: { type: integer, example: 57 }
+        total_pages: { type: integer, example: 3 }
+    ErroCampo:
+      type: object
+      required: [code, message]
+      properties:
+        field: { type: [string, 'null'], example: endereco.cep }
+        code: { type: string, example: cep_invalido }
+        message: { type: string, example: CEP deve conter 8 dígitos. }
+    Erros:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/ErroCampo' }
+  responses:
+    DadosInvalidos:
+      description: Um ou mais campos inválidos (todos listados; valores nunca ecoados)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erros' }
+          example:
+            errors:
+              - { field: documento, code: documento_invalido, message: Documento inválido. }
+              - { field: email, code: email_invalido, message: E-mail inválido. }
+    DocumentoDuplicado:
+      description: Documento já cadastrado para outro cliente
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erros' }
+          example:
+            errors:
+              - { field: documento, code: documento_duplicado, message: Documento já cadastrado. }
+    NaoEncontrado:
+      description: Cliente não encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erros' }
+          example:
+            errors:
+              - { field: null, code: cliente_nao_encontrado, message: Cliente não encontrado. }
